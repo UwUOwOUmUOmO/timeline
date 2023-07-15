@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Timeline
 {
@@ -53,12 +54,24 @@ namespace Timeline
         protected override void StartTimelineInternal()
         {
             _started = true;
-            GetTimer().StartTimer();
         }
 
         public override bool IsTimelineStarted() => _started;
 
         public override bool OwnBranch(uint branchId) => _owningBranches.Contains(branchId);
+        public override ExtractedEventLog Peek(int idx)
+        {
+            var convertedIndex = idx < 0 ? Count - 1 - Math.Abs(idx + 1) : idx;
+            if (convertedIndex >= Count || convertedIndex < 0) throw new IndexOutOfRangeException();
+            var iter = _logs.First;
+            for (var i = 0; i < convertedIndex; i++)
+            {
+                iter = iter!.Next;
+            }
+
+            return iter!.Value;
+        }
+
         public override void AddEvent(ExtractedDataclass data)
         {
             _logs.AddLast(new ExtractedEventLog
@@ -114,9 +127,19 @@ namespace Timeline
             _logs.RemoveLast();
             var targetData = branchTimeline.Extract();
             MergeEvents(targetData);
+            MatchAllocationId(branchTimeline.GetLatestAllocationId());
             return true;
         }
 
+        private void RebuildTimelineId(LinkedListNode<ExtractedEventLog> from)
+        {
+            var currId = from.Value.GetInternalId();
+            for (var it = from.Next; it != null; it = it.Next)
+            {
+                it.Value.ModifyInternalId(++currId);
+            }
+        }
+        
         private bool MergeTimelineFromBase(AbstractEventTimeline branchTimeline)
         {
             LinkedListNode<ExtractedEventLog> currNode = null;
@@ -130,6 +153,7 @@ namespace Timeline
 
             // Does not own branch
             if (currNode == null) return false;
+            var startingNode = currNode;
             foreach (var log in branchTimeline)
             {
                 // Add the log after a linked list node
@@ -138,12 +162,17 @@ namespace Timeline
                 else if (log.timestamp < currNode.Value.timestamp) AddEvent(log, currNode.Previous);
                 else currNode = currNode.Next;
             }
+
+            RebuildTimelineId(startingNode);
+            MatchAllocationId(branchTimeline.GetLatestAllocationId());
             return true;
         }
 
         public override bool MergeTimeline(AbstractEventTimeline branchTimeline)
         {
-            return !IsTimelineMergeableFromTip(branchTimeline) ? MergeTimelineFromBase(branchTimeline) : MergeTimelineFromTip(branchTimeline);
+            return !IsTimelineMergeableFromTip(branchTimeline)
+                ? MergeTimelineFromBase(branchTimeline)
+                : MergeTimelineFromTip(branchTimeline);
         }
 
         private bool IsBranchingOut(ExtractedEventLog log, AbstractEventTimeline branchTimeline)
@@ -159,6 +188,8 @@ namespace Timeline
             return lastEvent != null && IsBranchingOut(lastEvent, branchTimeline);
         }
 
+        protected override int GetLogsCount() => _logs.Count;
+
         public override ExtractedEventTimeline Extract()
         {
             var re = new ExtractedEventTimeline
@@ -171,13 +202,13 @@ namespace Timeline
             var i = 0;
             foreach (var log in _logs)
             {
-                re.logs[i++] = log;
+                re.logs.Add(log);
             }
             
             i = 0;
             foreach (var branch in _owningBranches)
             {
-                re.owningBranches[i++] = branch;
+                re.owningBranches.Add(branch);
             }
             return re;
         }
@@ -189,15 +220,17 @@ namespace Timeline
             ClearAllEvents();
             GetTimer().Reconstruct(extracted.timer);
             PauseTimeline();
+            ulong maxId = 0;
             foreach (var reducedLog in extracted.logs)
             {
                 _logs.AddLast(reducedLog);
+                maxId = maxId < reducedLog.GetInternalId() ? reducedLog.GetInternalId() : maxId;
             }
-
             foreach (var branch in extracted.owningBranches)
             {
                 _owningBranches.Add(branch);
             }
+            MatchAllocationId(maxId);
             _started = true;
         }
 

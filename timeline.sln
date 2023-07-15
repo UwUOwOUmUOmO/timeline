@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "timeline", "timeline\timeline.csproj", "{71DE643C-9E8F-474B-B5C6-096D9C106953}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TimelineTests", "TimelineTests\TimelineTests.csproj", "{C474007B-8B5F-4452-A51E-B26C1B8AAB0E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{71DE643C-9E8F-474B-B5C6-096D9C106953}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{71DE643C-9E8F-474B-B5C6-096D9C106953}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{71DE643C-9E8F-474B-B5C6-096D9C106953}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C474007B-8B5F-4452-A51E-B26C1B8AAB0E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C474007B-8B5F-4452-A51E-B26C1B8AAB0E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C474007B-8B5F-4452-A51E-B26C1B8AAB0E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C474007B-8B5F-4452-A51E-B26C1B8AAB0E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

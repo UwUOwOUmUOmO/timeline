@@ -35,13 +35,15 @@ namespace Timeline
     {
         private readonly BranchedTimelineTimer _timer;
         private readonly ulong _startingId;
-        private bool _started;
         
         public BranchedEventTimeline(uint internalId, ulong startingAllocationId) : base(internalId)
         {
             _timer = new BranchedTimelineTimer();
             _startingId = startingAllocationId;
+            EditAllocationId(_startingId);
         }
+
+        private void EditAllocationId(ulong newId) => MatchAllocationId(newId);
 
         public override ulong GetEarliestAllocationId() => _startingId;
         public void SetSplitEpoch(long time)
@@ -51,9 +53,6 @@ namespace Timeline
         }
 
         protected override AbstractTimelineTimer GetTimer() => _timer;
-        public override bool IsTimelineStarted() => _started;
-        public ExtractedEventTimeline ReduceThisTimeline() => base.Extract();
-
         public override AbstractEventTimeline PrepareReplication() =>
             new BranchedEventTimeline(GetInternalId(), _startingId);
     }
@@ -79,6 +78,7 @@ namespace Timeline
             var newTimeline = new BranchedEventTimeline(newTimelineId, prevActive.GetLatestAllocationId());
             newTimeline.SetSplitEpoch(lastTime);
             _activeTimeline = newTimeline;
+            _timelinesPool[newTimelineId] = newTimeline;
             if (startByDefault) prevActive.StartTimeline();
             return newTimelineId;
         }
@@ -152,10 +152,10 @@ namespace Timeline
                 originalTimelineId = _originalTimeline.GetInternalId(),
                 allTimelines = new(_timelinesPool.Count)
             };
-            var i = 0;
-            foreach (var reduced in _timelinesPool.Select(pair => pair.Value).Select(timeline => (timeline as BranchedEventTimeline)?.ReduceThisTimeline() ?? timeline.Extract()))
+            foreach (var reduced in _timelinesPool.Select(pair => pair.Value).Select(timeline =>
+                         timeline.Extract())) 
             {
-                re.allTimelines[i++] = reduced;
+                re.allTimelines.Add(reduced);
             }
             return re;
         }
@@ -180,7 +180,7 @@ namespace Timeline
         public override bool ResumeTimeline()
         {
             var active = GetActiveTimeline();
-            if (active.IsTimelinePaused()) return false;
+            if (!active.IsTimelinePaused()) return false;
             active.ResumeTimeline();
             return true;
         }
@@ -188,11 +188,35 @@ namespace Timeline
         public override bool PauseTimeline()
         {
             var active = GetActiveTimeline();
-            if (!active.IsTimelinePaused()) return false;
+            if (active.IsTimelinePaused()) return false;
             active.PauseTimeline();
             return true;
         }
-        
+
+        public override ExtractedEventLog Peek(int idx)
+        {
+            if (idx >= 0) return _originalTimeline[idx];
+            var movement = idx;
+            var iter = _activeTimeline;
+            while (iter != null)
+            {
+                // VERY lazy way to do this
+                try
+                {
+                    var re = iter[movement];
+                    return re;
+                }
+                catch (IndexOutOfRangeException)
+                {
+                    movement += iter.Count;
+                    iter = GetRootBranch(iter);
+                }
+                
+            }
+
+            throw new IndexOutOfRangeException();
+        }
+
         public ExtractedEventTimeline ExtractMainTimeline(AbstractEventTimeline original = null)
         {
             if (original == null) original = _activeTimeline;
@@ -229,7 +253,7 @@ namespace Timeline
                 throw new Exception("Either active timeline or original timeline was not found");
             // ------------------------------------------------------------------------------
             // Remove the active timeline and clear the timeline pool
-            _activeTimeline.PauseTimeline();
+            _activeTimeline?.PauseTimeline();
             _activeTimeline = null;
             _timelinesPool.Clear();
             // ------------------------------------------------------------------------------
@@ -281,12 +305,7 @@ namespace Timeline
             // set the original timeline and active timeline in the object
             _originalTimeline = _timelinesPool[reduced.originalTimelineId];
             _activeTimeline = _timelinesPool[reduced.activeTimelineId];
-            _idAllocator.Reset();
-            while (_idAllocator < maxId)
-            {
-                // Make sure the next allocated ID will be bigger than maxId
-                // This loop does nothing since IdAllocator<T> automatically increment its counter on implicit conversion
-            }
+            _idAllocator.Set(maxId);
         }
 
         public virtual MultiTimelineEventLogger PrepareReplication() => new MultiTimelineEventLogger();

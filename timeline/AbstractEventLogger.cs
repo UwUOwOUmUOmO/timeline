@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Timeline
 {
-
+    public class TimelineNotReadyException : Exception{}
     public abstract class AbstractTimelineTimer :
         ISelfExtractable<ExtractedTimelineTimer>,
         ISelfReconstructable<ExtractedTimelineTimer>
@@ -55,14 +55,14 @@ namespace Timeline
 
         public virtual void Reconstruct(ExtractedTimelineTimer extracted)
         {
-            var adjustedStartingTime = Now - extracted.estimatedTimeSinceEpoch;
             _isPaused = extracted.isPaused;
-            _pausedTime = extracted.lastPauseTime + adjustedStartingTime;
-            _resumedTime = extracted.lastResumeTime + adjustedStartingTime;
+            _pausedTime = extracted.lastPauseTime;
+            _resumedTime = extracted.lastResumeTime;
         }
     }
 
     public abstract class AbstractEventTimeline : 
+        ILoggable,
         ISelfExtractable<ExtractedEventTimeline>,
         ISelfReconstructable<ExtractedEventTimeline>,
         IEnumerable<ExtractedEventLog>,
@@ -81,9 +81,12 @@ namespace Timeline
         
         protected abstract AbstractTimelineTimer GetTimer();
         public long GetTime() => GetTimer().GetTimeProcessed();
+        public ExtractedEventLog this[int idx] => Peek(idx);
+        public int Count => GetLogsCount();
         public bool StartTimeline()
         {
             if (IsTimelineStarted()) return false;
+            GetTimer().StartTimer();;
             AddEvent(new TimelineActivationEvent());
             StartTimelineInternal();
             return true;
@@ -98,12 +101,24 @@ namespace Timeline
         public abstract IEnumerator<ExtractedEventLog> GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         public abstract ExtractedEventLog GetLastEvent();
+        public abstract ExtractedEventLog Peek(int idx);
         public abstract void AddEvent(ExtractedDataclass data);
         public abstract void RemoveEvent(uint eventId);
         public abstract bool MergeTimeline(AbstractEventTimeline branchTimeline);
         public abstract bool IsTimelineMergeableFromTip(AbstractEventTimeline branchTimeline);
-        public virtual void PauseTimeline() => GetTimer().Pause();
-        public virtual void ResumeTimeline() => GetTimer().Unpause();
+        protected abstract int GetLogsCount();
+
+        public virtual bool PauseTimeline()
+        {
+            GetTimer().Pause();
+            return true;
+        }
+
+        public virtual bool ResumeTimeline()
+        {
+            GetTimer().Unpause();
+            return true;
+        }
         public virtual bool IsTimelinePaused() => GetTimer().IsPaused;
         public uint GetInternalId() => _internalId;
         public abstract AbstractEventTimeline PrepareReplication();
@@ -116,18 +131,27 @@ namespace Timeline
         }
     }
     public abstract class AbstractEventLogger : 
+        ILoggable,
         ISelfExtractable<ExtractedEventTimeline>, 
         IExtractable<AbstractEventTimeline, ExtractedEventTimeline>
     {
+        public ExtractedEventLog this[int idx] => Peek(idx);
         protected abstract AbstractEventTimeline GetActiveTimeline();
         public abstract bool Initialize();
         public abstract bool StartTimeline();
         public abstract bool ResumeTimeline();
         public abstract bool PauseTimeline();
+        public bool IsTimelineStarted() => GetActiveTimeline().IsTimelineStarted();
+        public abstract ExtractedEventLog Peek(int idx);
         public virtual bool IsTimelinePaused() => GetActiveTimeline().IsTimelinePaused();
         public ExtractedEventTimeline Extract() => Extract(GetActiveTimeline());
         public virtual ExtractedEventTimeline Extract(AbstractEventTimeline original) => original.Extract();
+
         public virtual void AddEvent(ExtractedDataclass data)
-            => GetActiveTimeline().AddEvent(data);
+        {
+            var curr = GetActiveTimeline();
+            if (!curr.IsTimelineStarted() || curr.IsTimelinePaused()) throw new TimelineNotReadyException();
+            curr.AddEvent(data);
+        }
     }
 }

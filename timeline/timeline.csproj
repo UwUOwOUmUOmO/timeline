@@ -42,6 +42,7 @@
         <Compile Include="AbstractEventLogger.cs" />
         <Compile Include="IdAllocator.cs" />
         <Compile Include="IExtractable.cs" />
+        <Compile Include="ILoggable.cs" />
         <Compile Include="MultiTimelineEventLogger.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />
         <Compile Include="ExtractedDataclass.cs" />
