@@ -1,0 +1,27 @@
+# Ignore Visual Studio / Visual Studio Code files
+.vs/
+.vscode/
+.idea/
+
+# Ignore build output
+/bin/
+/obj/
+
+# Ignore NuGet packages
+/packages/
+
+# Ignore user-specific files
+*.suo
+*.user
+*.userprefs
+*.sln.docstates
+
+# Ignore test results
+/TestResults/
+
+# Ignore ReSharper files
+/_ReSharper.*
+
+# Ignore Unity generated files
+/Library/
+/Temp/
